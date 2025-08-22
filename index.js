@@ -7,11 +7,11 @@ const connectDB = require("./config/db");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
 const helmet = require("helmet");
-const rateLimit = require('express-rate-limit');
-const { sanitizeMiddleware } = require('./middleware/sanitize');
-const xss = require('xss-clean');
-const https = require('https');
-const fs = require('fs');
+const rateLimit = require("express-rate-limit");
+const { sanitizeMiddleware } = require("./middleware/sanitize");
+const xss = require("xss-clean");
+const https = require("https");
+const fs = require("fs");
 
 // Load env vars
 dotenv.config();
@@ -25,17 +25,17 @@ const app = express();
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
-  message: { message: 'Too many requests, please try again later.' }
+  message: { message: "Too many requests, please try again later." },
 });
 
 // Apply rate limiting to all routes
-app.use('/api/', apiLimiter);
+app.use("/api/", apiLimiter);
 
 // Security middleware with custom configuration
 app.use(
   helmet({
     crossOriginResourcePolicy: {
-      policy: "cross-origin"
+      policy: "cross-origin",
     },
     contentSecurityPolicy: {
       directives: {
@@ -43,17 +43,22 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:", "*"],
-        connectSrc: ["'self'", process.env.FRONTEND_URL || "http://localhost:5173"]
-      }
-    }
+        connectSrc: [
+          "'self'",
+          process.env.FRONTEND_URL || "http://localhost:5173",
+        ],
+      },
+    },
   })
 );
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://localhost:5173",
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 // Session configuration with enhanced security
@@ -64,17 +69,17 @@ app.use(
     saveUninitialized: false,
     store: MongoStore.create({
       mongoUrl: process.env.MONGODB_URI,
-      ttl: 24 * 60 * 60 // 1 day
+      ttl: 24 * 60 * 60, // 1 day
     }),
     cookie: {
-      secure: true,
+      secure: process.env.NODE_ENV === "production", // only secure in production
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: "lax",
       maxAge: 24 * 60 * 60 * 1000, // 1 day
-      path: '/'
+      path: "/",
     },
     rolling: true,
-    name: 'sessionId'
+    name: "sessionId",
   })
 );
 
@@ -85,12 +90,12 @@ app.use(
       fileSize: 10 * 1024 * 1024, // 10MB max file size
     },
     useTempFiles: true,
-    tempFileDir: path.join(__dirname, 'tmp'),
-    debug: process.env.NODE_ENV === 'development',
+    tempFileDir: path.join(__dirname, "tmp"),
+    debug: process.env.NODE_ENV === "development",
     safeFileNames: true,
     preserveExtension: true,
     abortOnLimit: true,
-    uploadTimeout: 30000
+    uploadTimeout: 30000,
   })
 );
 
@@ -98,13 +103,17 @@ app.use(
 app.use((req, res, next) => {
   if (!req.files) return next();
 
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-  const files = req.files.pictures ? (Array.isArray(req.files.pictures) ? req.files.pictures : [req.files.pictures]) : [];
+  const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
+  const files = req.files.pictures
+    ? Array.isArray(req.files.pictures)
+      ? req.files.pictures
+      : [req.files.pictures]
+    : [];
 
   for (const file of files) {
     if (!allowedTypes.includes(file.mimetype)) {
       return res.status(400).json({
-        message: 'Invalid file type. Only JPG, JPEG and PNG files are allowed.'
+        message: "Invalid file type. Only JPG, JPEG and PNG files are allowed.",
       });
     }
   }
@@ -140,28 +149,37 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Generate SSL certificates if they don't exist
-const certsDir = path.join(__dirname, 'certs');
-if (!fs.existsSync(certsDir)) {
-  fs.mkdirSync(certsDir);
-  const { exec } = require('child_process');
-  const command = `openssl req -x509 -newkey rsa:4096 -keyout ${path.join(certsDir, 'key.pem')} -out ${path.join(certsDir, 'cert.pem')} -days 365 -nodes -subj "/CN=localhost"`;
-  exec(command, (error, stdout, stderr) => {
-    if (error) {
-      console.error('Error generating certificates:', error);
-      return;
-    }
-    console.log('SSL certificates generated successfully!');
+// ===== Server start =====
+if (process.env.NODE_ENV === "production") {
+  // On Render → plain HTTP (Render already provides HTTPS)
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+} else {
+  // Local dev → HTTPS with self-signed certs
+  const certsDir = path.join(__dirname, "certs");
+  if (!fs.existsSync(certsDir)) {
+    fs.mkdirSync(certsDir);
+    const { exec } = require("child_process");
+    const command = `openssl req -x509 -newkey rsa:4096 -keyout ${path.join(
+      certsDir,
+      "key.pem"
+    )} -out ${path.join(
+      certsDir,
+      "cert.pem"
+    )} -days 365 -nodes -subj "/CN=localhost"`;
+    exec(command, (error) => {
+      if (error) console.error("Error generating certificates:", error);
+      else console.log("SSL certificates generated successfully!");
+    });
+  }
+
+  const httpsOptions = {
+    key: fs.readFileSync(path.join(certsDir, "key.pem")),
+    cert: fs.readFileSync(path.join(certsDir, "cert.pem")),
+  };
+
+  https.createServer(httpsOptions, app).listen(PORT, () => {
+    console.log(`Secure server running on https://localhost:${PORT}`);
   });
 }
-
-// HTTPS configuration
-const httpsOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'certs', 'key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'certs', 'cert.pem'))
-};
-
-// Always create HTTPS server
-https.createServer(httpsOptions, app).listen(PORT, () => {
-  console.log(`Secure server is running on port ${PORT}`);
-});
