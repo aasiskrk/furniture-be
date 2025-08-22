@@ -39,7 +39,27 @@ const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:5173",
   credentials: true,
 };
-app.use(cors(corsOptions));
+const allowedOrigins = [
+  "https://furniture-fe-eight.vercel.app",
+  "https://furniture-fe-git-main-aasiskrks-projects.vercel.app",
+  "https://furniture-5kp4z665b-aasiskrks-projects.vercel.app",
+  "http://localhost:5173"
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // allow non-browser requests like Postman
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS not allowed"));
+      }
+    },
+    credentials: true,
+  })
+);
+
 
 // Rate limiting
 const apiLimiter = rateLimit({
