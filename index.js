@@ -42,23 +42,14 @@ const corsOptions = {
 const allowedOrigins = [
   "https://furniture-fe-eight.vercel.app",
   "https://furniture-fe-git-main-aasiskrks-projects.vercel.app",
-  "https://furniture-5kp4z665b-aasiskrks-projects.vercel.app",
+  "https://furniture-3a810lou4-aasiskrks-projects.vercel.app/",
   "http://localhost:5173"
 ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // allow non-browser requests like Postman
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS not allowed"));
-      }
-    },
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 
 
 // Rate limiting
